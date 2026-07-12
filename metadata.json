@@ -1,0 +1,8 @@
+{
+  "name": "Curated Marketplace",
+  "description": "A beautiful, premium e-commerce marketplace with instant WhatsApp and digital enquiry features for exclusive, high-end products.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
