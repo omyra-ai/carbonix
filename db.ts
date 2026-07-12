@@ -1,7 +1,7 @@
 import pg from 'pg';
 import crypto from 'crypto';
-import { Enquiry, Product } from './src/types';
-import { PRODUCTS as DEFAULT_PRODUCTS } from './src/data/products';
+import { Enquiry, Product } from './src/types.js';
+import { PRODUCTS as DEFAULT_PRODUCTS } from './src/data/products.js';
 
 let pool: pg.Pool | null = null;
 

@@ -4,7 +4,7 @@ import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
 import dotenv from 'dotenv';
 import crypto from 'crypto';
-import { Enquiry, Product } from './src/types';
+import { Enquiry, Product } from './src/types.js';
 import { 
   saveEnquiry, 
   getAllEnquiries, 
@@ -22,8 +22,8 @@ import {
   logAuditEvent,
   recordLoginAttempt,
   checkIPLockState
-} from './db';
-import { sendEnquiryEmails, getResendClient } from './email-service';
+} from './db.js';
+import { sendEnquiryEmails, getResendClient } from './email-service.js';
 
 dotenv.config();
 

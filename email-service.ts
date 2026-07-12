@@ -1,5 +1,5 @@
 import { Resend } from 'resend';
-import { Enquiry } from './src/types';
+import { Enquiry } from './src/types.js';
 
 let resendClient: Resend | null = null;
 
