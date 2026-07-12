@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Heart, HelpCircle, ShieldCheck, ShoppingBag, Sparkles } from 'lucide-react';
+import { Heart, HelpCircle, ShieldCheck, ShoppingBag, Sparkles, Lock, ArrowLeft, ShieldAlert } from 'lucide-react';
 import { Product } from './types';
-import { PRODUCTS } from './data/products';
+import { PRODUCTS as STATIC_PRODUCTS } from './data/products';
 import Navbar from './components/Navbar';
 import ProductCard from './components/ProductCard';
 import ProductDetails from './components/ProductDetails';
@@ -11,26 +11,78 @@ import AdminPanel from './components/AdminPanel';
 
 export default function App() {
   // States
+  const [productsList, setProductsList] = useState<Product[]>(STATIC_PRODUCTS);
   const [wishlist, setWishlist] = useState<Product[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [activeCategory, setActiveCategory] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [enquiryProduct, setEnquiryProduct] = useState<Product | null>(null);
   const [isAdminOpen, setIsAdminOpen] = useState(false);
+  
+  // Custom Routing Alias states
+  const [currentAlias, setCurrentAlias] = useState<string>('admin');
+  const [showAlias404, setShowAlias404] = useState<boolean>(false);
 
-  // Load wishlist from local storage on mount
+  // Fetch dynamic products and active routing alias from server
+  const loadDynamicData = async () => {
+    try {
+      // 1. Load active products
+      const prodRes = await fetch('/api/products');
+      if (prodRes.ok) {
+        const prodData = await prodRes.json();
+        if (Array.isArray(prodData) && prodData.length > 0) {
+          setProductsList(prodData);
+        }
+      }
+    } catch (e) {
+      console.error('Failed to fetch dynamic products, falling back to preloaded list.');
+    }
+
+    try {
+      // 2. Load custom administrative path settings
+      const aliasRes = await fetch('/api/admin/alias');
+      let activeAlias = 'admin';
+      if (aliasRes.ok) {
+        const aliasData = await aliasRes.json();
+        if (aliasData.alias) {
+          activeAlias = aliasData.alias.toLowerCase().trim();
+          setCurrentAlias(activeAlias);
+        }
+      }
+
+      // 3. Resolve path to determine view
+      const pathToken = window.location.pathname.replace(/^\/|\/$/g, '').toLowerCase().trim();
+      if (pathToken === activeAlias) {
+        setIsAdminOpen(true);
+      } else if (pathToken === 'admin' && activeAlias !== 'admin') {
+        // User tries default /admin but administrator has moved it to custom alias e.g. /liza
+        setShowAlias404(true);
+      } else if (pathToken.length > 0 && pathToken !== activeAlias) {
+        // Any other unmatched administrative attempts
+        setShowAlias404(true);
+      }
+    } catch (e) {
+      console.error('Handshake failed resolving routing configuration.');
+    }
+  };
+
+  useEffect(() => {
+    loadDynamicData();
+  }, []);
+
+  // Sync wishlist from local storage whenever product list updates
   useEffect(() => {
     const savedWishlist = localStorage.getItem('curated_wishlist');
     if (savedWishlist) {
       try {
         const ids = JSON.parse(savedWishlist) as string[];
-        const filtered = PRODUCTS.filter((p) => ids.includes(p.id));
+        const filtered = productsList.filter((p) => ids.includes(p.id));
         setWishlist(filtered);
       } catch (e) {
         console.error('Failed to parse saved wishlist', e);
       }
     }
-  }, []);
+  }, [productsList]);
 
   // Save wishlist to local storage on change
   const saveWishlist = (updatedList: Product[]) => {
@@ -57,11 +109,11 @@ export default function App() {
     saveWishlist(updated);
   };
 
-  // Helper properties
-  const categories = Array.from(new Set(PRODUCTS.map((p) => p.category)));
+  // Helper properties derived from current products state
+  const categories = Array.from(new Set(productsList.map((p) => p.category))) as string[];
 
   // Filtered products list
-  const filteredProducts = PRODUCTS.filter((p) => {
+  const filteredProducts = productsList.filter((p) => {
     const matchesCategory = activeCategory === '' || p.category === activeCategory;
     const matchesSearch =
       p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -69,6 +121,49 @@ export default function App() {
       p.category.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesCategory && matchesSearch;
   });
+
+  /* ============================================================================
+     RENDER FLOW A: SECURITY 404 ROUTE LOCKOUT BLOCK
+     ============================================================================ */
+
+  if (showAlias404) {
+    return (
+      <div id="security-404-canvas" className="min-h-screen bg-brand-bg flex items-center justify-center p-6">
+        <div className="w-full max-w-md bg-white border border-brand-border rounded-3xl p-8 shadow-xl text-center relative overflow-hidden">
+          <div className="absolute -right-20 -top-20 h-40 w-40 rounded-full bg-brand-primary/5 blur-3xl" />
+          <div className="absolute -left-20 -bottom-20 h-40 w-40 rounded-full bg-brand-primary/10 blur-3xl" />
+
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-text text-brand-primary shadow-md mx-auto">
+            <ShieldAlert className="h-6 w-6 text-brand-primary" />
+          </div>
+
+          <h1 className="mt-6 font-sans text-2xl font-black text-brand-text uppercase tracking-tight">
+            Node Deactivated
+          </h1>
+          <p className="mt-3 font-sans text-xs text-stone-500 leading-relaxed">
+            The requested administration console route is offline or has been cryptographically reassigned to a different routing token. Accessing this endpoint is unauthorized.
+          </p>
+
+          <div className="mt-8 pt-6 border-t border-brand-border flex flex-col gap-3">
+            <button
+              onClick={() => {
+                setShowAlias404(false);
+                window.history.pushState({}, '', '/');
+              }}
+              className="w-full flex items-center justify-center gap-2 rounded-xl bg-brand-text hover:bg-brand-primary py-3 font-sans text-xs font-bold text-white transition-all cursor-pointer"
+            >
+              <ArrowLeft className="h-4 w-4 text-brand-primary" />
+              <span>RETURN TO MARKETPLACE</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  /* ============================================================================
+     RENDER FLOW B: REGULAR APP CATALOG & COMMAND DECK
+     ============================================================================ */
 
   return (
     <div id="app-root" className="min-h-screen bg-brand-bg font-sans text-brand-text selection:bg-brand-primary selection:text-white">
@@ -94,7 +189,17 @@ export default function App() {
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
         isAdminOpen={isAdminOpen}
-        onToggleAdmin={() => setIsAdminOpen(!isAdminOpen)}
+        onToggleAdmin={() => {
+          if (!isAdminOpen) {
+            // Push active administrative URL to path smoothly
+            window.history.pushState({}, '', `/${currentAlias}`);
+            setIsAdminOpen(true);
+          } else {
+            // Clear route alias upon exit
+            window.history.pushState({}, '', '/');
+            setIsAdminOpen(false);
+          }
+        }}
         onGoHome={() => setSelectedProduct(null)}
       />
 
@@ -105,12 +210,16 @@ export default function App() {
             <motion.div key="admin-view">
               <AdminPanel
                 onSelectProductById={(id) => {
-                  const found = PRODUCTS.find((p) => p.id === id);
+                  const found = productsList.find((p) => p.id === id);
                   if (found) {
                     setSelectedProduct(found);
                   }
                 }}
-                onClose={() => setIsAdminOpen(false)}
+                onClose={() => {
+                  setIsAdminOpen(false);
+                  window.history.pushState({}, '', '/');
+                }}
+                onProductCatalogChanged={loadDynamicData}
               />
             </motion.div>
           ) : selectedProduct ? (
@@ -135,7 +244,6 @@ export default function App() {
               {/* Editorial Hero Area */}
               <section id="hero" className="relative overflow-hidden bg-brand-card py-16 sm:py-20 lg:py-24 border-b border-brand-border">
                 <div className="absolute inset-0 z-0 opacity-40">
-                  {/* Subtle architectural accent geometric wireframe or gradient */}
                   <div className="absolute -left-20 -top-20 h-96 w-96 rounded-full bg-brand-primary/10 blur-3xl" />
                   <div className="absolute right-0 bottom-0 h-96 w-96 rounded-full bg-brand-primary/5 blur-3xl" />
                 </div>
@@ -279,11 +387,14 @@ export default function App() {
             <span className="font-mono text-[10px] tracking-wider text-stone-400">© 2026 CURATED STUDIO INC.</span>
             <span className="h-1.5 w-1.5 rounded-full bg-brand-border" />
             <button
-              onClick={() => setIsAdminOpen(true)}
+              onClick={() => {
+                window.history.pushState({}, '', `/${currentAlias}`);
+                setIsAdminOpen(true);
+              }}
               className="font-sans text-[10px] font-bold text-stone-500 hover:text-brand-primary hover:underline flex items-center gap-1 transition-colors cursor-pointer"
             >
-              <ShieldCheck className="h-3.5 w-3.5" />
-              <span>Admin Console</span>
+              <ShieldCheck className="h-3.5 w-3.5 text-brand-primary" />
+              <span>Admin Console ({currentAlias === 'admin' ? '/admin' : `/${currentAlias}`})</span>
             </button>
           </div>
         </div>
@@ -294,8 +405,8 @@ export default function App() {
         product={enquiryProduct}
         onClose={() => setEnquiryProduct(null)}
         onSuccessSubmit={() => {
-          // Trigger a silent background reload in admin panel if open
-          console.log('Enquiry forwarded! Admin panel synced.');
+          // Silent background sync
+          loadDynamicData();
         }}
       />
     </div>
