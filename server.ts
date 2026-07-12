@@ -1,7 +1,6 @@
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { createServer as createViteServer } from 'vite';
 import dotenv from 'dotenv';
 import crypto from 'crypto';
 import { Enquiry, Product } from './src/types.js';
@@ -564,14 +563,18 @@ const authenticateAdmin = (req: express.Request, res: express.Response, next: ex
   if (!process.env.VERCEL) {
     const PORT = 3000;
     if (process.env.NODE_ENV !== 'production') {
-      createViteServer({
-        server: { middlewareMode: true },
-        appType: 'spa',
-      }).then((vite) => {
-        app.use(vite.middlewares);
-        app.listen(PORT, '0.0.0.0', () => {
-          console.log(`Server running on http://0.0.0.0:${PORT} in development mode`);
+      import('vite').then(({ createServer: createViteServer }) => {
+        createViteServer({
+          server: { middlewareMode: true },
+          appType: 'spa',
+        }).then((vite) => {
+          app.use(vite.middlewares);
+          app.listen(PORT, '0.0.0.0', () => {
+            console.log(`Server running on http://0.0.0.0:${PORT} in development mode`);
+          });
         });
+      }).catch((err) => {
+        console.error('Failed to load Vite:', err);
       });
     } else {
       const distPath = path.join(process.cwd(), 'dist');
