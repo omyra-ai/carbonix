@@ -57,29 +57,29 @@ function verifyEcdsaSignature(jwk: any, challenge: string, signatureBase64: stri
   }
 }
 
-async function startServer() {
-  const app = express();
-  const PORT = 3000;
+const app = express();
+app.use(express.json());
 
-  app.use(express.json());
+// Export the app for serverless platforms like Vercel
+export { app };
 
-  // IP Extractor Helper
-  const getClientIP = (req: express.Request): string => {
-    return (req.headers['x-forwarded-for'] as string || req.socket.remoteAddress || '127.0.0.1').split(',')[0].trim();
-  };
+// IP Extractor Helper
+const getClientIP = (req: express.Request): string => {
+  return (req.headers['x-forwarded-for'] as string || req.socket.remoteAddress || '127.0.0.1').split(',')[0].trim();
+};
 
-  // Auth Middleware
-  const authenticateAdmin = (req: express.Request, res: express.Response, next: express.NextFunction) => {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ error: 'Missing or malformed Authorization header.' });
-    }
-    const token = authHeader.split(' ')[1];
-    if (!ACTIVE_SESSIONS.has(token)) {
-      return res.status(403).json({ error: 'Session expired or invalid.' });
-    }
-    next();
-  };
+// Auth Middleware
+const authenticateAdmin = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Missing or malformed Authorization header.' });
+  }
+  const token = authHeader.split(' ')[1];
+  if (!ACTIVE_SESSIONS.has(token)) {
+    return res.status(403).json({ error: 'Session expired or invalid.' });
+  }
+  next();
+};
 
   /* ============================================================================
      PUBLIC CONFIG API
@@ -560,24 +560,27 @@ async function startServer() {
     }
   });
 
-  // Serve static client assets or run Vite middleware
-  if (process.env.NODE_ENV !== 'production') {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: 'spa',
-    });
-    app.use(vite.middlewares);
-  } else {
-    const distPath = path.join(process.cwd(), 'dist');
-    app.use(express.static(distPath));
-    app.get('*', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
-    });
+  // Only start the standalone server if we are running in a local/non-serverless environment (i.e. not Vercel)
+  if (!process.env.VERCEL) {
+    const PORT = 3000;
+    if (process.env.NODE_ENV !== 'production') {
+      createViteServer({
+        server: { middlewareMode: true },
+        appType: 'spa',
+      }).then((vite) => {
+        app.use(vite.middlewares);
+        app.listen(PORT, '0.0.0.0', () => {
+          console.log(`Server running on http://0.0.0.0:${PORT} in development mode`);
+        });
+      });
+    } else {
+      const distPath = path.join(process.cwd(), 'dist');
+      app.use(express.static(distPath));
+      app.get('*', (req, res) => {
+        res.sendFile(path.join(distPath, 'index.html'));
+      });
+      app.listen(PORT, '0.0.0.0', () => {
+        console.log(`Server running on http://0.0.0.0:${PORT} in production mode`);
+      });
+    }
   }
-
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server running on http://0.0.0.0:${PORT} in ${process.env.NODE_ENV || 'development'} mode`);
-  });
-}
-
-startServer();
